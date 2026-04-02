@@ -1,0 +1,182 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+% Standalone repo: root file is main.tex. Keep conference_paper1.bib (matches \bibliography{...}).
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+% Clickable [n] citations and cross-refs in PDF viewers (load near end of preamble).
+\usepackage[hidelinks]{hyperref}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\graphicspath{{paper_figures/}}
+
+\begin{document}
+
+\title{Quantifying Popularity Bias and User-Centric Fairness in Recommender Systems: A Cross-Domain Empirical Study}
+
+\author{\IEEEauthorblockN{Cebo Mkhwanazi}
+\IEEEauthorblockA{\textit{Standard Bank Lab} \\
+\textit{School for Data Science and Computational Thinking}\\
+Stellenbosch University, Stellenbosch, South Africa \\
+29915759@sun.ac.za}
+}
+
+\maketitle
+
+\begin{abstract}
+Recommender systems frequently suffer from popularity and exposure biases, leading to a concentration of recommendations on a small subset of mainstream items and disparate accuracy across user groups. This empirical study focuses on two complementary views: \emph{macro-level} exposure inequality (how often items appear in top-$K$ recommendations) and \emph{user-centric} fairness (whether users with niche tastes pay a ``niche tax'' in RMSE or NDCG@10 relative to mainstream users).
+
+Six recommendation architectures (collaborative filtering (SVD, ALS, $k$-NN), content-based filtering (TF-IDF, logistic regression), and a hybrid/ID-based random forest) were evaluated on three public benchmarks (MovieLens 1M, Last.fm 2K, Book-Crossing) and one e-commerce review corpus (Takealot). Matrix factorization models (ALS, SVD) behave as strong popularity amplifiers, with extreme Gini coefficients (e.g., $\sim 0.9998$ for ALS on Takealot) and very low catalog coverage, while content-based models spread exposure more evenly but often achieve weaker ranking accuracy in sparse settings. User-centric analysis shows a consistent accuracy gap for niche users under neighborhood-based models ($k$-NN), with dataset- and model-dependent signs for $\Delta\mathrm{RMSE}$. We argue that deployment decisions should audit both aggregate exposure metrics and segment-level accuracy, using ranking-oriented metrics when content models lack calibrated rating heads. A companion manuscript studies simulated feedback loops and retraining dynamics separately.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Recommender Systems, Popularity Bias, Collaborative Filtering, Content-Based Filtering, Fairness, User-Centric Evaluation, Empirical Evaluation
+\end{IEEEkeywords}
+
+\section{Introduction}
+\label{sec:intro}
+
+Personalized recommender systems drive discovery on digital platforms but are trained on interaction data skewed toward popular items. This skew yields \emph{popularity bias} \cite{abdollahpouri2017controlling}: algorithms over-recommend mainstream items and under-serve the long tail, homogenizing experiences and disproportionately affecting users with niche tastes \cite{abdollahpouri2019unfairness}.
+
+Prior work often studies such biases on dense movie-rating benchmarks; such settings can under-represent the extreme sparsity and catalog scale of modern e-commerce. We present a cross-domain study that anchors MovieLens, Last.fm, and Book-Crossing against a large e-commerce corpus (Takealot), and we critique mapping content-similarity scores to explicit rating scales for RMSE, advocating ranking-based metrics (e.g., NDCG@10) where appropriate.
+
+We address two questions: \emph{(i)}~Do algorithms concentrate exposure on already popular items, and how does this differ between collaborative and content-based families? \emph{(ii)}~Do users with niche interaction histories suffer a ``niche tax'' in RMSE or NDCG@10 versus mainstream users?
+
+\textbf{Outline.} Section~\ref{sec:related} situates the work. Section~\ref{sec:methods} describes datasets, models, and protocols for macro and user-centric evaluation. Section~\ref{sec:results} reports results. Section~\ref{sec:conclusion} concludes. Simulated feedback with iterative retraining is analyzed in a companion paper.
+
+\section{Related Work}
+\label{sec:related}
+
+Popularity bias and learning-to-rank have been studied extensively in recommender systems \cite{abdollahpouri2017controlling}; unfairness arising from popularity skew is discussed in \cite{abdollahpouri2019unfairness}. Standard benchmarks include MovieLens \cite{harper2015movielens}, HetRec/Last.fm-style data \cite{cantador2011second}, and Book-Crossing \cite{ziegler2005improving}. Implementations often use libraries such as Surprise for $k$-NN and SVD \cite{hug2020surprise}. Our contribution is a unified empirical comparison across domains, including a sparse retail catalog, with macro exposure metrics and user-centric segment analysis.
+
+\section{Preliminaries and Methods}
+\label{sec:methods}
+
+\subsection{Overview}
+
+We employ a two-part design: macro-level exposure metrics, then user-centric segment analysis. Fig.~\ref{fig:pipeline} sketches the order of experiments (macro recommendations are evaluated for concentration and coverage; the same splits feed segment labels for RMSE and NDCG).
+
+\begin{figure}[!t]
+  \centering
+  \begin{tikzpicture}[
+      node distance=0.55cm and 0.65cm,
+      box/.style={rectangle, draw, rounded corners=2pt, minimum width=3.1cm, minimum height=0.95cm, align=center, font=\scriptsize},
+      arr/.style={-{Stealth[length=1.8mm]}, thick},
+    ]
+    \node[box] (a) {Exp.\ A\\Macro exposure};
+    \node[box, right=of a] (b) {Exp.\ B\\User-centric};
+    \draw[arr] (a) -- (b);
+  \end{tikzpicture}
+  \caption{Empirical pipeline: macro-level top-$K$ bias metrics, then user-centric fairness by niche/diverse/mainstream tertiles.}
+  \label{fig:pipeline}
+\end{figure}
+
+\subsection{Datasets}
+
+We use MovieLens 1M (explicit ratings, genre metadata), Last.fm 2K (implicit counts mapped to 1--5 percentiles; tags and artists), Book-Crossing (explicit ratings; author/publisher text; implicit zeros removed), and Takealot (e-commerce reviews; sparse interactions; title, brand, department). A $k$-core filter ($\geq 10$ interactions per user and item) stabilizes public graphs. Table~\ref{tab:datasets} lists corpora.
+
+\begin{table}[!t]
+  \centering
+  \caption{Corpora used in the cross-domain comparison.}
+  \label{tab:datasets}
+  \begin{tabular}{@{}llp{0.22\textwidth}@{}}
+    \toprule
+    \textbf{Dataset} & \textbf{Domain} & \textbf{Note} \\
+    \midrule
+    ML 1M & Movies & Large movie-rating benchmark; genres. \\
+    Last.fm 2K & Music & Counts $\rightarrow$ ratings; tags. \\
+    Book-Crossing & Books & Sparse ratings; text. \\
+    Takealot & E-commerce & Large sparse catalog. \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Models}
+
+Baselines: user-based $k$-NN; SVD and ALS (matrix factorization); TF-IDF and per-user logistic regression on TF-IDF metadata; random forest on label-encoded user and item IDs. SVD and $k$-NN use Surprise \cite{hug2020surprise}.
+
+\subsection{Protocols}
+
+\textbf{Macro (top-10):} Gini on recommendation frequencies, ARP, catalog coverage, Spearman $\rho$ between training popularity and exposure, plus auxiliary diagnostics (extended panels, log--log and CDF plots) logged in the experiment run for analysis but not all reproduced as figures here.
+
+\textbf{User-centric:} Users are split into Niche, Diverse, and Mainstream \emph{tertiles} by the mean popularity (in the training log) of items they interacted with. We report $\Delta\mathrm{RMSE}=\mathrm{RMSE}_{\mathrm{niche}}-\mathrm{RMSE}_{\mathrm{mainstream}}$ and NDCG@10. Content models without native rating scalars use a global training mean for RMSE; segment RMSE can be identical within such models; we emphasize NDCG@10 for cross-family comparison.
+
+\section{Results and Discussion}
+\label{sec:results}
+
+\subsection{Macro-level bias}
+
+Collaborative models concentrate recommendations on a few items (high Gini), while content-based models such as logistic regression on TF-IDF achieve higher catalog coverage. \textbf{Fig.~\ref{fig:macro}} is the main macro summary: each cell is one model--dataset pair. Darker Gini cells indicate stronger inequality in how often items appear in top-$10$ lists; higher coverage means a larger fraction of the catalog receives at least one recommendation. Reading down the Takealot column, ALS is extreme on both axes (near-maximum Gini, near-zero coverage), whereas LogReg improves coverage substantially at lower Gini than ALS. The three public benchmarks (MovieLens 1M, Last.fm, Book-Crossing) are aggregated consistently; Takealot uses the official split and the same metric code. Table~\ref{tab:macro} gives two representative pairs (ALS vs.\ LogReg) to anchor the heatmap.
+
+\begin{figure}[!t]
+  \centering
+  \begin{minipage}[b]{0.48\columnwidth}
+    \centering
+    \includegraphics[width=\linewidth]{macro_gini_heatmap.png}\\[0.5ex]
+    \footnotesize (a) Gini
+  \end{minipage}
+  \hfill
+  \begin{minipage}[b]{0.48\columnwidth}
+    \centering
+    \includegraphics[width=\linewidth]{macro_catalog_coverage_heatmap.png}\\[0.5ex]
+    \footnotesize (b) Catalog coverage
+  \end{minipage}
+  \caption{Macro exposure inequality (Gini on recommendation counts) and catalog coverage, by model and dataset. Takealot illustrates e-commerce sparsity: collaborative factorization can collapse to recommending almost no distinct items (low coverage).}
+  \label{fig:macro}
+\end{figure}
+
+\begin{table}[!t]
+  \centering
+  \caption{Representative macro metrics (ALS vs.\ LogReg).}
+  \label{tab:macro}
+  \begin{tabular}{@{}llrr@{}}
+    \toprule
+    \textbf{Dataset} & \textbf{Model} & \textbf{Gini} & \textbf{Cov.} \\
+    \midrule
+    Takealot & ALS & 0.9998 & 0.00029 \\
+    Takealot & LogReg & 0.733 & 0.563 \\
+    ML 1M & ALS & 0.996 & 0.019 \\
+    ML 1M & LogReg & 0.610 & 0.930 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+SVD shows strong positive $\rho$ between popularity and exposure on ML-1M ($\approx 0.52$). LogReg reaches high coverage (e.g., $\sim$93\% on ML-1M, $\sim$56\% on Takealot).
+
+\subsection{User-centric fairness}
+
+We summarize the niche--mainstream gap with \textbf{Fig.~\ref{fig:fairgap}} only: bar height is $\Delta\mathrm{RMSE}=\mathrm{RMSE}_{\mathrm{niche}}-\mathrm{RMSE}_{\mathrm{mainstream}}$ for each model and dataset. Positive bars mean niche users have higher error than mainstream users under RMSE. $k$-NN shows a clear positive gap on Book-Crossing in our run; SVD on Last.fm can reverse the sign. Content models that use a global mean for every test prediction (ALS, TF-IDF, LogReg in our implementation) show \emph{flat} $\Delta\mathrm{RMSE}$ across models within a dataset; the bar chart should be read together with NDCG@10 from the tables in the artifact, not RMSE alone. On Takealot, NDCG@10 is uniformly low ($<0.02$) for all models, reflecting extreme sparsity; the small gaps in the figure are less informative than ranking metrics there.
+
+\begin{figure*}[!t]
+  \centering
+  \includegraphics[width=0.92\textwidth]{fairness_gap_delta_rmse.png}
+  \caption{User-centric fairness gap ($\Delta\mathrm{RMSE}$, niche minus mainstream) by dataset and model. Global-mean fallbacks for some content models can equalize segment RMSE; interpret alongside NDCG@10.}
+  \label{fig:fairgap}
+\end{figure*}
+
+\subsection{Synthesis}
+
+Popularity bias is model- and domain-dependent. ALS can collapse to extreme inequality on massive sparse catalogs; content methods improve coverage but complicate RMSE comparison without calibrated scores. Systems should be audited for \emph{both} aggregate exposure (Fig.~\ref{fig:macro}) and equitable accuracy across segments (Fig.~\ref{fig:fairgap}).
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented an empirical framework comparing six recommenders across three public datasets and Takealot, measuring macro concentration and niche versus mainstream errors and NDCG@10. Matrix factorization can act as a popularity amplifier; content-based methods spread exposure but require careful ranking-oriented evaluation. Future work includes calibrated rating heads for content models, statistical significance across splits, richer user partitions, and, in a companion manuscript, simulated feedback loops with retraining.
+
+\section*{Acknowledgment}
+The authors thank Stellenbosch University and the Standard Bank Lab for research support.
+
+\clearpage
+\bibliographystyle{IEEEtran}
+\bibliography{conference_paper1}
+
+\end{document}

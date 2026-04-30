@@ -64,6 +64,10 @@ Unfairness arising from popularity skew is discussed thoroughly in \cite{abdolla
 
 Our contribution builds upon this literature by providing a unified empirical comparison across domains, specifically introducing a sparse retail catalog (Takealot) to the analysis. By measuring both macro exposure metrics and user-centric segment analysis side-by-side, we bridge the gap between item-side fairness (exposure) and user-side fairness (accuracy parity). This framing follows broader multi-stakeholder recommendation concerns where user utility, supplier exposure, and platform objectives can conflict \cite{abdollahpouri2020multistakeholder}.
 
+Beyond fairness framing, our metric design aligns with established evaluation guidance that separates pointwise prediction quality from ranking utility and novelty-aware behavior \cite{gunawardana2009evaluation,jarvelin2002cumulated,vargas2011novelty}. In particular, high top-$N$ accuracy can coexist with poor coverage and weak discovery, motivating explicit use of coverage and exposure-concentration diagnostics \cite{ge2010beyond,cremonesi2010performance}. These perspectives are essential when platform objectives include long-tail health in addition to immediate relevance.
+
+Recent bias surveys and dynamic-control studies further emphasize that static mitigation alone may not be sufficient once recommendations are repeatedly deployed and retrained on their own logs \cite{chen2023bias,morik2020controlling,sun2019debiasing}. While this paper is intentionally static in protocol, we interpret our cross-domain findings as baseline evidence for why longitudinal monitoring is operationally necessary.
+
 \section{Preliminaries and Methods}
 \label{sec:methods}
 
@@ -409,6 +413,8 @@ From a systems perspective, the practical question is not whether one model domi
 
 \subsection{Why Head Dominance Persists}
 The long-tail economics perspective emphasizes that many catalogs derive strategic value from discovery, not only hit-rate optimization \cite{anderson2004long}. However, if model training repeatedly optimizes on head-skewed logs, the system can converge toward a narrow recommendation regime. Quantifying inequality explicitly via measures rooted in concentration analysis (e.g., Gini) makes this drift visible and actionable for platform teams \cite{cowell2011measuring}.
+
+From a market-design perspective, long-tail value is strongest when retrieval systems can surface niche inventory reliably rather than intermittently \cite{brynjolfsson2006longtail}. This reinforces the practical need to pair classical relevance optimization with explicit catalog-health constraints, especially in sparse e-commerce settings where collaborative overlap is weak and popularity priors dominate.
 
 \section{Conclusion}
 \label{sec:conclusion}
